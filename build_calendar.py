@@ -73,6 +73,19 @@ def teams_in(row):
         out.append((slug, name))
     return out
 
+def name_from_blob(blob):
+    """Recover a club name from raw row text. The site prints each club twice
+    (full name then short name), so the doubled prefix is the name."""
+    b = re.sub(r"^\s*\d+(st|nd|rd|th)\b", " ", blob)
+    b = re.sub(r"\b(" + "|".join(map(re.escape, COMPS)) + r")\b", " ", b)
+    b = re.sub(r"Att:\s*\d+", " ", b)
+    b = re.sub(r"HT:\s*\d+\s*[-\u2013\u2014]\s*\d+", " ", b)
+    w = b.split()
+    for k in range(min(6, len(w) // 2), 0, -1):
+        if w[:k] == w[k:2 * k]:
+            return " ".join(w[:k])
+    return " ".join(w[:4]) if w else "TBC"
+
 def ground_for(name):
     if name in GROUNDS:
         return GROUNDS[name]
@@ -94,7 +107,7 @@ def parse():
             continue
         text = " ".join(row.get_text(" ", strip=True).split())
         sides = teams_in(row)
-        if len(sides) < 2 or not any(s == US_SLUG for s, _ in sides[:2]):
+        if not any(s == US_SLUG for s, _ in sides[:2]):
             continue
         comp = next((v for k, v in COMPS.items() if re.search(rf"\b{k}\b", text)), None)
         datestr = m.group(1)
@@ -110,14 +123,21 @@ def build(rows):
     for datestr, (text, sides, comp) in rows:
         d = datetime(int(datestr[:4]), int(datestr[4:6]), int(datestr[6:8]))
         comp = comp or "Fixture"
-        home = sides[0][0] == US_SLUG
-        opp = sides[1][1] if home else sides[0][1]
 
         t = re.search(r"(\d{1,2}):(\d{2})(am|pm)", text)
         s = None if t else re.search(r"(?<!\d)(\d{1,2})\s*[-\u2013\u2014]\s*(\d{1,2})(?!\d)", text)
         if not t and not s:
             skipped.append((datestr, text[:90]))
             continue
+
+        mark = t or s
+        if len(sides) >= 2:
+            home = sides[0][0] == US_SLUG
+            opp = sides[1][1] if home else sides[0][1]
+        else:
+            # opponent has no NCEL page - read the name out of the row text
+            home = US in text[:mark.start()]
+            opp = name_from_blob(text[mark.end():] if home else text[:mark.start()])
 
         n += 1
         loc = esc(HOME if home else ground_for(opp))

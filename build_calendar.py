@@ -4,7 +4,7 @@ Scrapes the NCEL fixture page for Harrogate Railway Athletic and writes an
 iCalendar feed. Run daily by GitHub Actions; output is served from GitHub Pages.
 """
 import re, sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 from bs4 import BeautifulSoup
 
@@ -104,11 +104,12 @@ def build(rows):
             opp = re.sub(r"\s+", " ", opp_blob).strip()[:40] or "TBC"
         comp = next((v for k, v in COMPS.items() if re.search(rf"\b{k}\b", text)), "Fixture")
         n += 1
+        print(f"  {n:>3}. {datestr}  {'RESULT' if score else 'FIXTURE'}  {comp[:22]:<22} | {re.sub(chr(92)+chr(115)+chr(43),chr(32),text)[:95]}")
 
         if score:
             title = f"{US} {score} {opp} (H)" if home else f"{opp} {score} {US} (A)"
             ev += ["BEGIN:VEVENT", f"UID:rail-{datestr}-{n:02d}@ncefl", "SEQUENCE:0",
-                   f"DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%S}Z",
+                   f"DTSTAMP:{datetime.now(timezone.utc):%Y%m%dT%H%M%S}Z",
                    f"DTSTART;VALUE=DATE:{d:%Y%m%d}",
                    f"DTEND;VALUE=DATE:{d + timedelta(days=1):%Y%m%d}",
                    f"SUMMARY:{esc(title)}",
@@ -121,7 +122,7 @@ def build(rows):
             en = st + timedelta(hours=2)
             title = f"{US} v {opp} (H)" if home else f"{opp} v {US} (A)"
             ev += ["BEGIN:VEVENT", f"UID:rail-{datestr}-{n:02d}@ncefl", "SEQUENCE:0",
-                   f"DTSTAMP:{datetime.utcnow():%Y%m%dT%H%M%S}Z",
+                   f"DTSTAMP:{datetime.now(timezone.utc):%Y%m%dT%H%M%S}Z",
                    f"DTSTART:{st:%Y%m%dT%H%M%S}Z", f"DTEND:{en:%Y%m%dT%H%M%S}Z",
                    f"SUMMARY:{esc(title)}",
                    f"LOCATION:{esc(HOME if home else GROUNDS.get(opp, opp))}",
